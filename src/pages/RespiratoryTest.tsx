@@ -375,14 +375,23 @@ const RespiratoryTest = () => {
               body: JSON.stringify({ audioBase64 }),
             });
 
-            const body = (await response.json()) as Partial<LungAnalysisResponse> & { message?: string; error?: string };
+            const responseText = await response.text();
+            let body: (Partial<LungAnalysisResponse> & { message?: string; error?: string }) | null = null;
+
+            try {
+              body = responseText
+                ? (JSON.parse(responseText) as Partial<LungAnalysisResponse> & { message?: string; error?: string })
+                : null;
+            } catch {
+              throw new Error("Respiratory API returned an invalid response payload.");
+            }
 
             if (!response.ok) {
-              throw new Error(body.error || body.message || "Analysis failed.");
+              throw new Error(body?.error || body?.message || "Analysis failed.");
             }
 
             const supportedSources = new Set(["lung-cnn-pth", "node-wav-fallback"]);
-            if (!supportedSources.has(String(body.source)) || typeof body.healthPercent !== "number") {
+            if (!body || !supportedSources.has(String(body.source)) || typeof body.healthPercent !== "number") {
               throw new Error("Model response missing or invalid.");
             }
 
