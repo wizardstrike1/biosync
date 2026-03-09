@@ -14,63 +14,7 @@ import {
   loadRespiratoryHistory,
 } from "@/lib/testHistory";
 import { computeHealthScore } from "@/lib/healthScore";
-
-const MS_PER_DAY = 24 * 60 * 60 * 1000;
-
-const startOfLocalDay = (value: Date) =>
-  new Date(value.getFullYear(), value.getMonth(), value.getDate());
-
-const dayKey = (value: Date) => {
-  const year = value.getFullYear();
-  const month = String(value.getMonth() + 1).padStart(2, "0");
-  const day = String(value.getDate()).padStart(2, "0");
-  return `${year}-${month}-${day}`;
-};
-
-const computeDailyStreak = (createdAtValues: string[]) => {
-  const completedDays = new Set<number>();
-
-  createdAtValues.forEach((createdAt) => {
-    const date = new Date(createdAt);
-    if (!Number.isNaN(date.getTime())) {
-      completedDays.add(startOfLocalDay(date).getTime());
-    }
-  });
-
-  if (completedDays.size === 0) {
-    return { streak: 0, completedToday: false };
-  }
-
-  const sortedDays = [...completedDays]
-    .map((value) => new Date(value))
-    .sort((a, b) => b.getTime() - a.getTime());
-
-  const today = startOfLocalDay(new Date());
-  const latest = startOfLocalDay(sortedDays[0]);
-  const daysFromLatestToToday = Math.floor((today.getTime() - latest.getTime()) / MS_PER_DAY);
-
-  if (daysFromLatestToToday > 1) {
-    return { streak: 0, completedToday: false };
-  }
-
-  let streak = 1;
-  for (let i = 1; i < sortedDays.length; i += 1) {
-    const prev = startOfLocalDay(sortedDays[i - 1]);
-    const current = startOfLocalDay(sortedDays[i]);
-    const gap = Math.floor((prev.getTime() - current.getTime()) / MS_PER_DAY);
-
-    if (gap !== 1) {
-      break;
-    }
-
-    streak += 1;
-  }
-
-  return {
-    streak,
-    completedToday: dayKey(latest) === dayKey(today),
-  };
-};
+import { computeCurrentDailyStreak } from "@/lib/streak";
 
 const tests = [
   {
@@ -144,7 +88,7 @@ const Dashboard = () => {
       ...eyeHistory.map((entry) => entry.createdAt),
     ];
 
-    return computeDailyStreak(allCreatedAt);
+    return computeCurrentDailyStreak(allCreatedAt);
   }, [eyeHistory, hearingHistory, motorHistory, respiratoryHistory]);
 
   const testCount = hearingHistory.length + respiratoryHistory.length + motorHistory.length + eyeHistory.length;

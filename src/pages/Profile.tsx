@@ -9,6 +9,7 @@ import {
   loadRespiratoryHistory,
 } from "@/lib/testHistory";
 import { computeHealthScore } from "@/lib/healthScore";
+import { computeHighestDailyStreak } from "@/lib/streak";
 
 const Profile = () => {
   const { user } = useUser();
@@ -16,6 +17,7 @@ const Profile = () => {
   const { signOut } = useClerk();
   const [counts, setCounts] = useState({ hearing: 0, respiratory: 0, motor: 0, eye: 0 });
   const [overallScore, setOverallScore] = useState(0);
+  const [highestStreak, setHighestStreak] = useState(0);
 
   useEffect(() => {
     let active = true;
@@ -37,6 +39,15 @@ const Profile = () => {
         eye: eye.length,
       });
       setOverallScore(computeHealthScore(hearing, respiratory, motor).overall);
+
+      const allCreatedAt = [
+        ...hearing.map((entry) => entry.createdAt),
+        ...respiratory.map((entry) => entry.createdAt),
+        ...motor.map((entry) => entry.createdAt),
+        ...eye.map((entry) => entry.createdAt),
+      ];
+
+      setHighestStreak(computeHighestDailyStreak(allCreatedAt));
     };
 
     void loadStats();
@@ -91,6 +102,10 @@ const Profile = () => {
           <div className="card-elevated rounded-2xl p-4 border border-border text-center">
             <p className="text-2xl font-display font-bold text-gradient">{totalTests}</p>
             <p className="text-[10px] text-muted-foreground mt-1">Tests Taken</p>
+          </div>
+          <div className="card-elevated rounded-2xl p-4 border border-border text-center col-span-2">
+            <p className="text-2xl font-display font-bold text-gradient">{highestStreak}</p>
+            <p className="text-[10px] text-muted-foreground mt-1">Best Streak (Days)</p>
           </div>
         </div>
 
