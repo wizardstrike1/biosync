@@ -46,7 +46,7 @@ const tests = [
   {
     title: "Memory Sequence",
     description: "Repeat growing patterns to test short-term memory",
-    icon: <Brain className="h-5 w-5 text-primary" />,
+    icon: <Brain className="h-5 w-5 text-foreground" />,
     route: "/test/memory",
   },
 ];

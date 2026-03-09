@@ -7,7 +7,7 @@ const tests = [
   { title: "Respiratory Health", description: "Exhale analysis & lung capacity", icon: <Wind className="h-5 w-5 text-respiratory" />, route: "/test/respiratory" },
   { title: "Eye Tracking & Blink", description: "Saccade accuracy & blink patterns", icon: <Eye className="h-5 w-5 text-eye-tracking" />, route: "/test/pupil" },
   { title: "Motor Control", description: "Reaction time & fine motor skills", icon: <Hand className="h-5 w-5 text-motor" />, route: "/test/motor" },
-  { title: "Memory Sequence", description: "Repeat an increasingly long tile sequence", icon: <Brain className="h-5 w-5 text-primary" />, route: "/test/memory" },
+  { title: "Memory Sequence", description: "Repeat an increasingly long tile sequence", icon: <Brain className="h-5 w-5 text-foreground" />, route: "/test/memory" },
 ];
 
 const Tests = () => {

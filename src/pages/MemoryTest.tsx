@@ -23,6 +23,7 @@ const MemoryTest = () => {
   const [sequence, setSequence] = useState<number[]>([]);
   const [inputIndex, setInputIndex] = useState(0);
   const [highlighted, setHighlighted] = useState<number | null>(null);
+  const [pressedTile, setPressedTile] = useState<number | null>(null);
   const [bestLevel, setBestLevel] = useState(0);
 
   const timeoutRef = useRef<number | null>(null);
@@ -75,6 +76,11 @@ const MemoryTest = () => {
 
   const handleTileClick = (tileIndex: number) => {
     if (phase !== "input") return;
+
+    setPressedTile(tileIndex);
+    window.setTimeout(() => {
+      setPressedTile((current) => (current === tileIndex ? null : current));
+    }, 180);
 
     if (tileIndex !== sequence[inputIndex]) {
       endGame();
@@ -138,6 +144,7 @@ const MemoryTest = () => {
         <div className="w-full grid grid-cols-3 gap-3 max-w-[320px]">
           {Array.from({ length: GRID_SIZE }, (_, index) => {
             const isLit = highlighted === index;
+            const isPressed = pressedTile === index;
             return (
               <button
                 key={index}
@@ -147,7 +154,7 @@ const MemoryTest = () => {
                   isLit
                     ? "bg-primary border-primary shadow-lg shadow-primary/40 scale-[1.04]"
                     : "bg-secondary/60 border-border"
-                } ${phase === "input" ? "active:scale-95" : ""}`}
+                } ${isPressed ? "ring-2 ring-primary/80 shadow-lg shadow-primary/35 scale-[1.03]" : ""} ${phase === "input" ? "active:scale-95" : ""}`}
                 aria-label={`Tile ${index + 1}`}
               />
             );
