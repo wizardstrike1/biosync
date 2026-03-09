@@ -1,17 +1,76 @@
 import { motion } from "framer-motion";
-import { Ear, Wind, Eye, Hand, Activity } from "lucide-react";
+import { Ear, Wind, Eye, Hand, Activity, Flame } from "lucide-react";
 import TestCard from "@/components/TestCard";
 import { useEffect, useMemo, useState } from "react";
 import { useAuth } from "@/lib/auth";
 import {
+  EyeHistoryEntry,
   HearingHistoryEntry,
   MotorHistoryEntry,
   RespiratoryHistoryEntry,
+  loadEyeHistory,
   loadHearingHistory,
   loadMotorHistory,
   loadRespiratoryHistory,
 } from "@/lib/testHistory";
 import { computeHealthScore } from "@/lib/healthScore";
+
+const MS_PER_DAY = 24 * 60 * 60 * 1000;
+
+const startOfLocalDay = (value: Date) =>
+  new Date(value.getFullYear(), value.getMonth(), value.getDate());
+
+const dayKey = (value: Date) => {
+  const year = value.getFullYear();
+  const month = String(value.getMonth() + 1).padStart(2, "0");
+  const day = String(value.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+};
+
+const computeDailyStreak = (createdAtValues: string[]) => {
+  const completedDays = new Set<number>();
+
+  createdAtValues.forEach((createdAt) => {
+    const date = new Date(createdAt);
+    if (!Number.isNaN(date.getTime())) {
+      completedDays.add(startOfLocalDay(date).getTime());
+    }
+  });
+
+  if (completedDays.size === 0) {
+    return { streak: 0, completedToday: false };
+  }
+
+  const sortedDays = [...completedDays]
+    .map((value) => new Date(value))
+    .sort((a, b) => b.getTime() - a.getTime());
+
+  const today = startOfLocalDay(new Date());
+  const latest = startOfLocalDay(sortedDays[0]);
+  const daysFromLatestToToday = Math.floor((today.getTime() - latest.getTime()) / MS_PER_DAY);
+
+  if (daysFromLatestToToday > 1) {
+    return { streak: 0, completedToday: false };
+  }
+
+  let streak = 1;
+  for (let i = 1; i < sortedDays.length; i += 1) {
+    const prev = startOfLocalDay(sortedDays[i - 1]);
+    const current = startOfLocalDay(sortedDays[i]);
+    const gap = Math.floor((prev.getTime() - current.getTime()) / MS_PER_DAY);
+
+    if (gap !== 1) {
+      break;
+    }
+
+    streak += 1;
+  }
+
+  return {
+    streak,
+    completedToday: dayKey(latest) === dayKey(today),
+  };
+};
 
 const tests = [
   {
@@ -45,21 +104,24 @@ const Dashboard = () => {
   const [hearingHistory, setHearingHistory] = useState<HearingHistoryEntry[]>([]);
   const [respiratoryHistory, setRespiratoryHistory] = useState<RespiratoryHistoryEntry[]>([]);
   const [motorHistory, setMotorHistory] = useState<MotorHistoryEntry[]>([]);
+  const [eyeHistory, setEyeHistory] = useState<EyeHistoryEntry[]>([]);
 
   useEffect(() => {
     let active = true;
 
     const loadData = async () => {
-      const [hearing, respiratory, motor] = await Promise.all([
+      const [hearing, respiratory, motor, eye] = await Promise.all([
         loadHearingHistory(userId),
         loadRespiratoryHistory(userId),
         loadMotorHistory(userId),
+        loadEyeHistory(userId),
       ]);
 
       if (!active) return;
       setHearingHistory(hearing);
       setRespiratoryHistory(respiratory);
       setMotorHistory(motor);
+      setEyeHistory(eye);
     };
 
     void loadData();
@@ -74,7 +136,18 @@ const Dashboard = () => {
     [hearingHistory, respiratoryHistory, motorHistory],
   );
 
-  const testCount = hearingHistory.length + respiratoryHistory.length + motorHistory.length;
+  const streak = useMemo(() => {
+    const allCreatedAt = [
+      ...hearingHistory.map((entry) => entry.createdAt),
+      ...respiratoryHistory.map((entry) => entry.createdAt),
+      ...motorHistory.map((entry) => entry.createdAt),
+      ...eyeHistory.map((entry) => entry.createdAt),
+    ];
+
+    return computeDailyStreak(allCreatedAt);
+  }, [eyeHistory, hearingHistory, motorHistory, respiratoryHistory]);
+
+  const testCount = hearingHistory.length + respiratoryHistory.length + motorHistory.length + eyeHistory.length;
 
   return (
     <div className="px-5 pt-14 pb-6">
@@ -89,6 +162,28 @@ const Dashboard = () => {
         </div>
         <div className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center">
           <Activity className="h-5 w-5 text-primary animate-pulse-glow" />
+        </div>
+      </motion.div>
+
+      <motion.div
+        initial={{ opacity: 0, y: 8 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 0.15 }}
+        className="card-elevated rounded-2xl p-4 border border-border mb-6"
+      >
+        <div className="flex items-center justify-between">
+          <div>
+            <p className="text-xs text-muted-foreground uppercase tracking-wider">Daily Streak</p>
+            <p className="text-2xl font-display font-bold text-foreground mt-1">{streak.streak} day{streak.streak === 1 ? "" : "s"}</p>
+            <p className="text-xs text-muted-foreground mt-1">
+              {streak.completedToday
+                ? "Completed today. Keep the momentum."
+                : "Complete one test today to keep your streak alive."}
+            </p>
+          </div>
+          <div className="h-10 w-10 rounded-full bg-warning/10 flex items-center justify-center">
+            <Flame className={`h-5 w-5 ${streak.streak > 0 ? "text-warning" : "text-muted-foreground"}`} />
+          </div>
         </div>
       </motion.div>
 
