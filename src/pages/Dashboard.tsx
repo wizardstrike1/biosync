@@ -1,5 +1,5 @@
 import { motion } from "framer-motion";
-import { Ear, Wind, Eye, Hand, Activity, Flame } from "lucide-react";
+import { Ear, Wind, Eye, Hand, Activity, Flame, Brain } from "lucide-react";
 import TestCard from "@/components/TestCard";
 import { useEffect, useMemo, useState } from "react";
 import { useAuth } from "@/lib/auth";
@@ -7,9 +7,11 @@ import {
   EyeHistoryEntry,
   HearingHistoryEntry,
   MotorHistoryEntry,
+  MemoryHistoryEntry,
   RespiratoryHistoryEntry,
   loadEyeHistory,
   loadHearingHistory,
+  loadMemoryHistory,
   loadMotorHistory,
   loadRespiratoryHistory,
 } from "@/lib/testHistory";
@@ -41,6 +43,12 @@ const tests = [
     icon: <Hand className="h-5 w-5 text-motor" />,
     route: "/test/motor",
   },
+  {
+    title: "Memory Sequence",
+    description: "Repeat growing patterns to test short-term memory",
+    icon: <Brain className="h-5 w-5 text-primary" />,
+    route: "/test/memory",
+  },
 ];
 
 const Dashboard = () => {
@@ -49,16 +57,18 @@ const Dashboard = () => {
   const [respiratoryHistory, setRespiratoryHistory] = useState<RespiratoryHistoryEntry[]>([]);
   const [motorHistory, setMotorHistory] = useState<MotorHistoryEntry[]>([]);
   const [eyeHistory, setEyeHistory] = useState<EyeHistoryEntry[]>([]);
+  const [memoryHistory, setMemoryHistory] = useState<MemoryHistoryEntry[]>([]);
 
   useEffect(() => {
     let active = true;
 
     const loadData = async () => {
-      const [hearing, respiratory, motor, eye] = await Promise.all([
+      const [hearing, respiratory, motor, eye, memory] = await Promise.all([
         loadHearingHistory(userId),
         loadRespiratoryHistory(userId),
         loadMotorHistory(userId),
         loadEyeHistory(userId),
+        loadMemoryHistory(userId),
       ]);
 
       if (!active) return;
@@ -66,6 +76,7 @@ const Dashboard = () => {
       setRespiratoryHistory(respiratory);
       setMotorHistory(motor);
       setEyeHistory(eye);
+      setMemoryHistory(memory);
     };
 
     void loadData();
@@ -86,12 +97,13 @@ const Dashboard = () => {
       ...respiratoryHistory.map((entry) => entry.createdAt),
       ...motorHistory.map((entry) => entry.createdAt),
       ...eyeHistory.map((entry) => entry.createdAt),
+      ...memoryHistory.map((entry) => entry.createdAt),
     ];
 
     return computeCurrentDailyStreak(allCreatedAt);
-  }, [eyeHistory, hearingHistory, motorHistory, respiratoryHistory]);
+  }, [eyeHistory, hearingHistory, memoryHistory, motorHistory, respiratoryHistory]);
 
-  const testCount = hearingHistory.length + respiratoryHistory.length + motorHistory.length + eyeHistory.length;
+  const testCount = hearingHistory.length + respiratoryHistory.length + motorHistory.length + eyeHistory.length + memoryHistory.length;
 
   return (
     <div className="px-5 pt-14 pb-6">

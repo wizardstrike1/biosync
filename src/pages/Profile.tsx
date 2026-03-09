@@ -5,6 +5,7 @@ import { useEffect, useMemo, useState } from "react";
 import {
   loadEyeHistory,
   loadHearingHistory,
+  loadMemoryHistory,
   loadMotorHistory,
   loadRespiratoryHistory,
 } from "@/lib/testHistory";
@@ -15,7 +16,7 @@ const Profile = () => {
   const { user } = useUser();
   const { userId } = useAuth();
   const { signOut } = useClerk();
-  const [counts, setCounts] = useState({ hearing: 0, respiratory: 0, motor: 0, eye: 0 });
+  const [counts, setCounts] = useState({ hearing: 0, respiratory: 0, motor: 0, eye: 0, memory: 0 });
   const [overallScore, setOverallScore] = useState(0);
   const [highestStreak, setHighestStreak] = useState(0);
 
@@ -23,11 +24,12 @@ const Profile = () => {
     let active = true;
 
     const loadStats = async () => {
-      const [hearing, respiratory, motor, eye] = await Promise.all([
+      const [hearing, respiratory, motor, eye, memory] = await Promise.all([
         loadHearingHistory(userId),
         loadRespiratoryHistory(userId),
         loadMotorHistory(userId),
         loadEyeHistory(userId),
+        loadMemoryHistory(userId),
       ]);
 
       if (!active) return;
@@ -37,6 +39,7 @@ const Profile = () => {
         respiratory: respiratory.length,
         motor: motor.length,
         eye: eye.length,
+        memory: memory.length,
       });
       setOverallScore(computeHealthScore(hearing, respiratory, motor).overall);
 
@@ -45,6 +48,7 @@ const Profile = () => {
         ...respiratory.map((entry) => entry.createdAt),
         ...motor.map((entry) => entry.createdAt),
         ...eye.map((entry) => entry.createdAt),
+        ...memory.map((entry) => entry.createdAt),
       ];
 
       setHighestStreak(computeHighestDailyStreak(allCreatedAt));
@@ -58,8 +62,8 @@ const Profile = () => {
   }, [userId]);
 
   const totalTests = useMemo(
-    () => counts.hearing + counts.respiratory + counts.motor + counts.eye,
-    [counts.eye, counts.hearing, counts.motor, counts.respiratory],
+    () => counts.hearing + counts.respiratory + counts.motor + counts.eye + counts.memory,
+    [counts.eye, counts.hearing, counts.memory, counts.motor, counts.respiratory],
   );
 
   const avatarUrl =
@@ -125,6 +129,10 @@ const Profile = () => {
           <div className="rounded-xl bg-secondary/50 p-4 text-sm text-foreground flex justify-between">
             <span>Eye Checker Sessions</span>
             <span className="font-semibold">{counts.eye}</span>
+          </div>
+          <div className="rounded-xl bg-secondary/50 p-4 text-sm text-foreground flex justify-between">
+            <span>Memory Sessions</span>
+            <span className="font-semibold">{counts.memory}</span>
           </div>
         </div>
 

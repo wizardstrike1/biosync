@@ -14,10 +14,12 @@ import {
 import {
   EyeHistoryEntry,
   HearingHistoryEntry,
+  MemoryHistoryEntry,
   MotorHistoryEntry,
   RespiratoryHistoryEntry,
   loadEyeHistory,
   loadHearingHistory,
+  loadMemoryHistory,
   loadMotorHistory,
   loadRespiratoryHistory,
 } from "@/lib/testHistory";
@@ -55,21 +57,24 @@ const Results = () => {
   const [respiratoryHistory, setRespiratoryHistory] = useState<RespiratoryHistoryEntry[]>([]);
   const [motorHistory, setMotorHistory] = useState<MotorHistoryEntry[]>([]);
   const [eyeHistory, setEyeHistory] = useState<EyeHistoryEntry[]>([]);
+  const [memoryHistory, setMemoryHistory] = useState<MemoryHistoryEntry[]>([]);
 
   const refreshHistory = useCallback(async () => {
     setIsLoading(true);
     try {
-      const [hearing, respiratory, motor, eye] = await Promise.all([
+      const [hearing, respiratory, motor, eye, memory] = await Promise.all([
         loadHearingHistory(userId),
         loadRespiratoryHistory(userId),
         loadMotorHistory(userId),
         loadEyeHistory(userId),
+        loadMemoryHistory(userId),
       ]);
 
       setHearingHistory(hearing);
       setRespiratoryHistory(respiratory);
       setMotorHistory(motor);
       setEyeHistory(eye);
+      setMemoryHistory(memory);
     } finally {
       setIsLoading(false);
     }
@@ -116,6 +121,14 @@ const Results = () => {
     [eyeHistory],
   );
 
+  const memoryLevelData = useMemo<ChartRow[]>(
+    () =>
+      [...memoryHistory]
+        .reverse()
+        .map((entry) => ({ label: formatShortDate(entry.createdAt), value: entry.squaresRemembered })),
+    [memoryHistory],
+  );
+
   const charts = useMemo<ChartConfig[]>(
     () => [
       {
@@ -150,8 +163,16 @@ const Results = () => {
         formatValue: (value) => `${value.toFixed(3)}s`,
         yDomain: ["auto", "auto"],
       },
+      {
+        key: "memory-level",
+        label: "Memory Sequence Score",
+        color: "hsl(var(--primary))",
+        data: memoryLevelData,
+        formatValue: (value) => `${Math.round(value)} tiles`,
+        yDomain: ["auto", "auto"],
+      },
     ],
-    [eyeAverageTimeData, hearingData, motorData, respiratoryScoreData],
+    [eyeAverageTimeData, hearingData, memoryLevelData, motorData, respiratoryScoreData],
   );
 
   return (
