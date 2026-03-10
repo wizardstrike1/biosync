@@ -16,8 +16,25 @@ import {
   loadRespiratoryHistory,
 } from "@/lib/testHistory";
 import { computeHealthScore } from "@/lib/healthScore";
-import { computeCurrentDailyStreak } from "@/lib/streak";
+import { computeCurrentDailyStreak, computeHighestDailyStreak } from "@/lib/streak";
 import { getUserAvatarUrl } from "@/lib/userProfile";
+import { isSupabaseConfigured, supabase } from "@/lib/supabase";
+import { Button } from "@/components/ui/button";
+
+type LeaderboardEntry = {
+  userId: string;
+  currentStreak: number;
+  highestStreak: number;
+};
+
+type LeaderboardSort = "current" | "highest";
+
+const RESULTS_TABLE = "biosync_results";
+
+const compactUserId = (value: string) => {
+  if (value.length <= 10) return value;
+  return `${value.slice(0, 4)}...${value.slice(-4)}`;
+};
 
 const tests = [
   {
@@ -60,6 +77,11 @@ const Dashboard = () => {
   const [motorHistory, setMotorHistory] = useState<MotorHistoryEntry[]>([]);
   const [eyeHistory, setEyeHistory] = useState<EyeHistoryEntry[]>([]);
   const [memoryHistory, setMemoryHistory] = useState<MemoryHistoryEntry[]>([]);
+  const [isLeaderboardOpen, setIsLeaderboardOpen] = useState(false);
+  const [leaderboardSort, setLeaderboardSort] = useState<LeaderboardSort>("current");
+  const [leaderboardEntries, setLeaderboardEntries] = useState<LeaderboardEntry[]>([]);
+  const [isLeaderboardLoading, setIsLeaderboardLoading] = useState(false);
+  const [leaderboardError, setLeaderboardError] = useState<string | null>(null);
 
   useEffect(() => {
     let active = true;
@@ -108,6 +130,70 @@ const Dashboard = () => {
   const testCount = hearingHistory.length + respiratoryHistory.length + motorHistory.length + eyeHistory.length + memoryHistory.length;
   const avatarUrl = getUserAvatarUrl(user);
 
+  const fetchLeaderboard = async () => {
+    setIsLeaderboardLoading(true);
+    setLeaderboardError(null);
+
+    if (!isSupabaseConfigured || !supabase) {
+      setLeaderboardEntries([]);
+      setLeaderboardError("Global leaderboard requires Supabase configuration.");
+      setIsLeaderboardLoading(false);
+      return;
+    }
+
+    try {
+      const { data, error } = await supabase
+        .from(RESULTS_TABLE)
+        .select("user_id,created_at")
+        .order("created_at", { ascending: false })
+        .limit(10000);
+
+      if (error) {
+        throw error;
+      }
+
+      const rows = Array.isArray(data) ? data as Array<{ user_id: string; created_at: string }> : [];
+      const byUser = new Map<string, string[]>();
+
+      rows.forEach((row) => {
+        if (!row?.user_id || !row?.created_at) return;
+        const existing = byUser.get(row.user_id) ?? [];
+        existing.push(row.created_at);
+        byUser.set(row.user_id, existing);
+      });
+
+      const entries = [...byUser.entries()].map(([entryUserId, createdAtValues]) => ({
+        userId: entryUserId,
+        currentStreak: computeCurrentDailyStreak(createdAtValues).streak,
+        highestStreak: computeHighestDailyStreak(createdAtValues),
+      }));
+
+      setLeaderboardEntries(entries);
+    } catch {
+      setLeaderboardEntries([]);
+      setLeaderboardError("Could not load global leaderboard. This may require broader read policy on results.");
+    } finally {
+      setIsLeaderboardLoading(false);
+    }
+  };
+
+  const openLeaderboard = () => {
+    setIsLeaderboardOpen(true);
+    void fetchLeaderboard();
+  };
+
+  const sortedLeaderboardEntries = useMemo(() => {
+    return [...leaderboardEntries].sort((a, b) => {
+      if (leaderboardSort === "current") {
+        if (b.currentStreak !== a.currentStreak) return b.currentStreak - a.currentStreak;
+        return b.highestStreak - a.highestStreak;
+      }
+
+      if (b.highestStreak !== a.highestStreak) return b.highestStreak - a.highestStreak;
+      return b.currentStreak - a.currentStreak;
+    });
+  }, [leaderboardEntries, leaderboardSort]);
+
   return (
     <div className="px-5 pt-14 pb-6">
       <motion.div
@@ -143,6 +229,9 @@ const Dashboard = () => {
                 ? "Completed today. Keep the momentum."
                 : "Complete one test today to keep your streak alive."}
             </p>
+            <Button size="sm" variant="outline" className="mt-3" onClick={openLeaderboard}>
+              View Global Leaderboard
+            </Button>
           </div>
           <div className="h-10 w-10 rounded-full bg-warning/10 flex items-center justify-center">
             <Flame className={`h-5 w-5 ${streak.streak > 0 ? "text-warning" : "text-muted-foreground"}`} />
@@ -195,6 +284,58 @@ const Dashboard = () => {
           />
         ))}
       </div>
+
+      {isLeaderboardOpen && (
+        <div className="fixed inset-0 z-[120] bg-black/70 backdrop-blur-sm px-4 py-10" onClick={() => setIsLeaderboardOpen(false)}>
+          <div className="mx-auto max-w-lg rounded-2xl border border-border bg-card p-4" onClick={(event) => event.stopPropagation()}>
+            <div className="flex items-center justify-between gap-2">
+              <h3 className="text-sm font-display font-semibold">Global Streak Leaderboard</h3>
+              <Button size="sm" variant="ghost" onClick={() => setIsLeaderboardOpen(false)}>Close</Button>
+            </div>
+
+            <div className="mt-3 flex gap-2">
+              <Button
+                size="sm"
+                variant={leaderboardSort === "current" ? "default" : "outline"}
+                onClick={() => setLeaderboardSort("current")}
+              >
+                Current Streak
+              </Button>
+              <Button
+                size="sm"
+                variant={leaderboardSort === "highest" ? "default" : "outline"}
+                onClick={() => setLeaderboardSort("highest")}
+              >
+                All-Time Best
+              </Button>
+            </div>
+
+            <div className="mt-4 max-h-80 overflow-y-auto space-y-2">
+              {isLeaderboardLoading && <p className="text-xs text-muted-foreground">Loading leaderboard...</p>}
+              {!isLeaderboardLoading && leaderboardError && (
+                <p className="text-xs text-muted-foreground">{leaderboardError}</p>
+              )}
+              {!isLeaderboardLoading && !leaderboardError && sortedLeaderboardEntries.length === 0 && (
+                <p className="text-xs text-muted-foreground">No streak data found yet.</p>
+              )}
+
+              {!isLeaderboardLoading && !leaderboardError && sortedLeaderboardEntries.slice(0, 50).map((entry, index) => (
+                <div key={entry.userId} className="rounded-lg border border-border bg-secondary/30 px-3 py-2 flex items-center justify-between gap-3">
+                  <div>
+                    <p className="text-xs font-semibold text-foreground">
+                      #{index + 1} {entry.userId === userId ? "You" : compactUserId(entry.userId)}
+                    </p>
+                    <p className="text-[11px] text-muted-foreground">Current: {entry.currentStreak}d · Best: {entry.highestStreak}d</p>
+                  </div>
+                  <p className="text-sm font-display font-bold text-primary">
+                    {leaderboardSort === "current" ? entry.currentStreak : entry.highestStreak}
+                  </p>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
