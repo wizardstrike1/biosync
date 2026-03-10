@@ -18,7 +18,6 @@ import {
 import { computeHealthScore } from "@/lib/healthScore";
 import { computeCurrentDailyStreak, computeHighestDailyStreak } from "@/lib/streak";
 import { getUserAvatarUrl } from "@/lib/userProfile";
-import { isSupabaseConfigured, supabase } from "@/lib/supabase";
 import { Button } from "@/components/ui/button";
 
 type LeaderboardEntry = {
@@ -28,8 +27,6 @@ type LeaderboardEntry = {
 };
 
 type LeaderboardSort = "current" | "highest";
-
-const RESULTS_TABLE = "biosync_results";
 
 const compactUserId = (value: string) => {
   if (value.length <= 10) return value;
@@ -145,39 +142,14 @@ const Dashboard = () => {
     setIsLeaderboardLoading(true);
     setLeaderboardError(null);
 
-    if (!isSupabaseConfigured || !supabase) {
-      setLeaderboardEntries([]);
-      setLeaderboardError("Global leaderboard requires Supabase configuration.");
-      setIsLeaderboardLoading(false);
-      return;
-    }
-
     try {
-      const { data, error } = await supabase
-        .from(RESULTS_TABLE)
-        .select("user_id,created_at")
-        .order("created_at", { ascending: false })
-        .limit(10000);
-
-      if (error) {
-        throw error;
+      const response = await fetch("/api/leaderboard/streaks");
+      if (!response.ok) {
+        throw new Error("Leaderboard request failed.");
       }
 
-      const rows = Array.isArray(data) ? data as Array<{ user_id: string; created_at: string }> : [];
-      const byUser = new Map<string, string[]>();
-
-      rows.forEach((row) => {
-        if (!row?.user_id || !row?.created_at) return;
-        const existing = byUser.get(row.user_id) ?? [];
-        existing.push(row.created_at);
-        byUser.set(row.user_id, existing);
-      });
-
-      const entries = [...byUser.entries()].map(([entryUserId, createdAtValues]) => ({
-        userId: entryUserId,
-        currentStreak: computeCurrentDailyStreak(createdAtValues).streak,
-        highestStreak: computeHighestDailyStreak(createdAtValues),
-      }));
+      const body = await response.json() as { entries?: LeaderboardEntry[] };
+      const entries = Array.isArray(body.entries) ? body.entries : [];
 
       // Always include the current user using already-loaded local/synced history.
       if (userId && currentUserCreatedAtValues.length > 0) {
@@ -198,7 +170,7 @@ const Dashboard = () => {
       setLeaderboardEntries(entries);
     } catch {
       setLeaderboardEntries([]);
-      setLeaderboardError("Could not load global leaderboard. This may require broader read policy on results.");
+      setLeaderboardError("Could not load global leaderboard. Make sure server has SUPABASE_SERVICE_ROLE_KEY configured.");
     } finally {
       setIsLeaderboardLoading(false);
     }
