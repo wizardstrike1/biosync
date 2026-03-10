@@ -1,5 +1,5 @@
 import { motion } from "framer-motion";
-import { User, LogOut, Camera, Trash2 } from "lucide-react";
+import { User, LogOut, Camera, Trash2, PencilLine } from "lucide-react";
 import { useAuth, useClerk, useUser } from "@/lib/auth";
 import { ChangeEvent, useEffect, useMemo, useRef, useState } from "react";
 import {
@@ -13,6 +13,7 @@ import { computeHealthScore } from "@/lib/healthScore";
 import { computeHighestDailyStreak } from "@/lib/streak";
 import { isSupabaseConfigured, supabase } from "@/lib/supabase";
 import { getUserAvatarUrl, getUserDisplayName } from "@/lib/userProfile";
+import { Input } from "@/components/ui/input";
 
 const AVATAR_STORAGE_BUCKET = "avatars";
 const MAX_IMAGE_SIZE_BYTES = 5 * 1024 * 1024;
@@ -41,6 +42,8 @@ const Profile = () => {
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
   const [isAvatarSaving, setIsAvatarSaving] = useState(false);
   const [avatarNotice, setAvatarNotice] = useState<string | null>(null);
+  const [isEditingProfile, setIsEditingProfile] = useState(false);
+  const [nameInput, setNameInput] = useState("");
   const inputRef = useRef<HTMLInputElement | null>(null);
 
   useEffect(() => {
@@ -90,28 +93,50 @@ const Profile = () => {
   );
 
   const accountAvatarUrl = getUserAvatarUrl(user);
+  const accountDisplayName = getUserDisplayName(user);
 
   useEffect(() => {
     setAvatarUrl(accountAvatarUrl);
   }, [accountAvatarUrl]);
 
-  const saveAvatarUrl = async (nextAvatarUrl: string | null) => {
+  useEffect(() => {
+    setNameInput(accountDisplayName);
+  }, [accountDisplayName]);
+
+  const updateProfileMetadata = async (payload: { avatarUrl?: string | null; name?: string }) => {
     if (!supabase || !isSupabaseConfigured) {
       throw new Error("Supabase is not configured for account profile updates.");
     }
 
+    const metadataUpdate: Record<string, string | null> = {};
+
+    if (Object.prototype.hasOwnProperty.call(payload, "avatarUrl")) {
+      const nextAvatarUrl = payload.avatarUrl ?? null;
+      metadataUpdate.avatar_url = nextAvatarUrl;
+      metadataUpdate.picture = nextAvatarUrl;
+    }
+
+    if (Object.prototype.hasOwnProperty.call(payload, "name")) {
+      const cleaned = payload.name?.trim() ?? "";
+      metadataUpdate.full_name = cleaned.length > 0 ? cleaned : null;
+      metadataUpdate.name = cleaned.length > 0 ? cleaned : null;
+    }
+
     const { error } = await supabase.auth.updateUser({
-      data: {
-        avatar_url: nextAvatarUrl,
-        picture: nextAvatarUrl,
-      },
+      data: metadataUpdate,
     });
 
     if (error) {
       throw error;
     }
 
-    setAvatarUrl(nextAvatarUrl);
+    if (Object.prototype.hasOwnProperty.call(payload, "avatarUrl")) {
+      setAvatarUrl(payload.avatarUrl ?? null);
+    }
+
+    if (Object.prototype.hasOwnProperty.call(payload, "name")) {
+      setNameInput(payload.name?.trim() ?? "");
+    }
   };
 
   const uploadToStorage = async (file: File, nextUserId: string) => {
@@ -163,7 +188,7 @@ const Profile = () => {
         nextAvatarUrl = await fileToDataUrl(file);
       }
 
-      await saveAvatarUrl(nextAvatarUrl);
+      await updateProfileMetadata({ avatarUrl: nextAvatarUrl });
       setAvatarNotice("Profile picture updated.");
     } catch (err) {
       setAvatarNotice(err instanceof Error ? err.message : "Could not update profile picture.");
@@ -176,7 +201,7 @@ const Profile = () => {
     setAvatarNotice(null);
     setIsAvatarSaving(true);
     try {
-      await saveAvatarUrl(null);
+      await updateProfileMetadata({ avatarUrl: null });
       setAvatarNotice("Profile picture removed.");
     } catch (err) {
       setAvatarNotice(err instanceof Error ? err.message : "Could not remove profile picture.");
@@ -185,7 +210,20 @@ const Profile = () => {
     }
   };
 
-  const displayName = getUserDisplayName(user);
+  const handleSaveName = async () => {
+    setAvatarNotice(null);
+    setIsAvatarSaving(true);
+    try {
+      await updateProfileMetadata({ name: nameInput });
+      setAvatarNotice("Name updated.");
+    } catch (err) {
+      setAvatarNotice(err instanceof Error ? err.message : "Could not update name.");
+    } finally {
+      setIsAvatarSaving(false);
+    }
+  };
+
+  const displayName = accountDisplayName;
 
   const email = user?.email ?? "No email available";
 
@@ -208,34 +246,66 @@ const Profile = () => {
           </div>
         </div>
 
-        <div className="mb-6 space-y-2">
-          <input
-            ref={inputRef}
-            type="file"
-            accept="image/*"
-            className="hidden"
-            onChange={handlePickAvatar}
-          />
-          <div className="flex gap-2">
-            <button
-              type="button"
-              onClick={() => inputRef.current?.click()}
-              disabled={isAvatarSaving || !userId}
-              className="flex-1 rounded-xl border border-border bg-secondary/40 px-3 py-2 text-sm text-foreground inline-flex items-center justify-center gap-2 disabled:opacity-60"
-            >
-              <Camera className="h-4 w-4" />
-              {isAvatarSaving ? "Saving..." : "Edit Profile Picture"}
-            </button>
-            <button
-              type="button"
-              onClick={() => void handleRemoveAvatar()}
-              disabled={isAvatarSaving || !avatarUrl || !userId}
-              className="rounded-xl border border-border bg-secondary/40 px-3 py-2 text-sm text-foreground inline-flex items-center justify-center gap-2 disabled:opacity-60"
-            >
-              <Trash2 className="h-4 w-4" />
-              Remove
-            </button>
-          </div>
+        <div className="mb-6 space-y-3">
+          <button
+            type="button"
+            onClick={() => setIsEditingProfile((value) => !value)}
+            className="w-full rounded-xl border border-border bg-secondary/40 px-3 py-2 text-sm text-foreground inline-flex items-center justify-center gap-2"
+          >
+            <PencilLine className="h-4 w-4" />
+            {isEditingProfile ? "Close Editor" : "Edit Profile"}
+          </button>
+
+          {isEditingProfile && (
+            <div className="rounded-xl border border-border bg-secondary/20 p-3 space-y-3">
+              <div className="space-y-2">
+                <label className="text-xs text-muted-foreground">Display Name</label>
+                <div className="flex gap-2">
+                  <Input
+                    value={nameInput}
+                    onChange={(event) => setNameInput(event.target.value)}
+                    placeholder="Enter your name"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => void handleSaveName()}
+                    disabled={isAvatarSaving || !userId}
+                    className="rounded-xl border border-border bg-secondary/40 px-3 py-2 text-sm text-foreground disabled:opacity-60"
+                  >
+                    Save
+                  </button>
+                </div>
+              </div>
+
+              <input
+                ref={inputRef}
+                type="file"
+                accept="image/*"
+                className="hidden"
+                onChange={handlePickAvatar}
+              />
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => inputRef.current?.click()}
+                  disabled={isAvatarSaving || !userId}
+                  className="flex-1 rounded-xl border border-border bg-secondary/40 px-3 py-2 text-sm text-foreground inline-flex items-center justify-center gap-2 disabled:opacity-60"
+                >
+                  <Camera className="h-4 w-4" />
+                  {isAvatarSaving ? "Saving..." : "Edit Profile Picture"}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => void handleRemoveAvatar()}
+                  disabled={isAvatarSaving || !avatarUrl || !userId}
+                  className="rounded-xl border border-border bg-secondary/40 px-3 py-2 text-sm text-foreground inline-flex items-center justify-center gap-2 disabled:opacity-60"
+                >
+                  <Trash2 className="h-4 w-4" />
+                  Remove
+                </button>
+              </div>
+            </div>
+          )}
           {avatarNotice && <p className="text-xs text-muted-foreground">{avatarNotice}</p>}
         </div>
 
