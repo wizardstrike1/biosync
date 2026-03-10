@@ -27,6 +27,7 @@ type LeaderboardEntry = {
 };
 
 type LeaderboardSort = "current" | "highest";
+type LeaderboardMode = "global" | "self";
 
 const compactUserId = (value: string) => {
   if (value.length <= 10) return value;
@@ -79,6 +80,7 @@ const Dashboard = () => {
   const [leaderboardEntries, setLeaderboardEntries] = useState<LeaderboardEntry[]>([]);
   const [isLeaderboardLoading, setIsLeaderboardLoading] = useState(false);
   const [leaderboardError, setLeaderboardError] = useState<string | null>(null);
+  const [leaderboardMode, setLeaderboardMode] = useState<LeaderboardMode>("self");
 
   useEffect(() => {
     let active = true;
@@ -168,8 +170,20 @@ const Dashboard = () => {
       }
 
       setLeaderboardEntries(entries);
+      setLeaderboardMode("global");
     } catch {
-      setLeaderboardEntries([]);
+      if (userId && currentUserCreatedAtValues.length > 0) {
+        setLeaderboardEntries([
+          {
+            userId,
+            currentStreak: computeCurrentDailyStreak(currentUserCreatedAtValues).streak,
+            highestStreak: computeHighestDailyStreak(currentUserCreatedAtValues),
+          },
+        ]);
+      } else {
+        setLeaderboardEntries([]);
+      }
+      setLeaderboardMode("self");
       setLeaderboardError("Could not load global leaderboard. Make sure server has SUPABASE_SERVICE_ROLE_KEY configured.");
     } finally {
       setIsLeaderboardLoading(false);
@@ -308,6 +322,10 @@ const Dashboard = () => {
                 All-Time Best
               </Button>
             </div>
+
+            <p className="mt-2 text-[11px] text-muted-foreground">
+              Mode: {leaderboardMode === "global" ? "Global mode (all accounts)" : "Self-only fallback"}
+            </p>
 
             <div className="mt-4 max-h-80 overflow-y-auto space-y-2">
               {isLeaderboardLoading && <p className="text-xs text-muted-foreground">Loading leaderboard...</p>}
