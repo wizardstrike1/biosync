@@ -107,7 +107,21 @@ const readHistory = <T>(key: string): T[] => {
 
 const writeHistory = <T>(key: string, entries: T[]) => {
   if (!isBrowser()) return;
-  window.localStorage.setItem(key, JSON.stringify(entries.slice(0, MAX_HISTORY)));
+
+  const cappedEntries = entries.slice(0, MAX_HISTORY);
+
+  try {
+    window.localStorage.setItem(key, JSON.stringify(cappedEntries));
+    return;
+  } catch {
+    // Quota can be exceeded on constrained browsers; retry with fewer items.
+  }
+
+  try {
+    window.localStorage.setItem(key, JSON.stringify(cappedEntries.slice(0, Math.max(5, Math.floor(MAX_HISTORY / 2)))));
+  } catch {
+    // Last resort: skip local persistence instead of throwing.
+  }
 };
 
 const pushHistoryEntry = <T extends { id: string; createdAt: string }>(key: string, entry: T) => {
